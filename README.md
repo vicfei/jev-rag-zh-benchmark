@@ -21,13 +21,14 @@ Companion artifacts: pattern library [awesome-jev-prompts](https://github.com/vi
 
 Model pinned `typesafe/jev-1.13-20260917` via OpenRouter. Pools: 1 positive + 9 hard negatives each, passages ≤3,000 chars. Full logs in `logs/`.
 
-| Ranker (Chinese) | nDCG@5 | nDCG@10 | MRR@10 | R@1 | R@5 |
+| Ranker (Chinese) | nDCG@5 (95% CI) | nDCG@10 (95% CI) | MRR@10 | R@1 | R@5 |
 |---|---:|---:|---:|---:|---:|
-| **Jev Score (score-zh)** | **0.546** | **0.602** | **0.477** | **0.260** | 0.830 |
+| **Jev Score (score-zh)** | **0.546** [0.481, 0.611] | **0.602** [0.553, 0.653] | **0.477** | **0.260** | 0.830 |
 | Jev Noul (noul-zh) | 0.531 | 0.588 | 0.458 | 0.240 | **0.830** |
-| BM25 (jieba) | 0.413 | 0.513 | 0.363 | 0.110 | 0.690 |
+| BM25 (jieba) | 0.413 [0.353, 0.477] | 0.513 [0.475, 0.555] | 0.363 | 0.110 | 0.690 |
 
-- Jev Score beats BM25 by **+13.3 nDCG@5 points** on Chinese hard negatives; Recall@1 is 2.4×.
+- **Paired delta (Jev Score − BM25): nDCG@5 +0.133 [95% CI +0.051, +0.232]; nDCG@10 +0.089 [+0.031, +0.157]** — bootstrap over queries (n=1000), intervals exclude zero.
+- Jev Score beats BM25 by +13.3 nDCG@5 points on Chinese hard negatives; Recall@1 is 2.4×.
 - Score vs Noul nearly tie (Δ0.015 nDCG@5): for pure ranking the binary question is enough — the rubric earns its keep only when you need levels.
 - Separation AUC ≈ 0.715 for both primitives (hard negatives are genuinely hard: some negatives partially answer).
 - Cost: **$0.071 for the whole S1** (2,000 calls, 1.68M input tokens). Latency p50 0.47s / p95 0.61s at 8 workers.
@@ -35,4 +36,4 @@ Model pinned `typesafe/jev-1.13-20260917` via OpenRouter. Pools: 1 positive + 9 
 
 ## S1 结果（中文）
 
-锁定模型 `typesafe/jev-1.13-20260917`（OpenRouter 通道），100 查询 × (1 正例 + 9 难负例)。**Jev Score 在中文难负例上 nDCG@5 0.546，比 BM25 高 13.3 个点，Recall@1 是其 2.4 倍**；Score 与 Noul 几乎打平（纯排序场景二值问题就够）；分离度 AUC≈0.715；全程成本 $0.071、p50 延迟 0.47s。限制条款见英文节。阈值扫描见 `results/s1_noul-zh_sweep.csv`。
+锁定模型 `typesafe/jev-1.13-20260917`（OpenRouter 通道），100 查询 × (1 正例 + 9 难负例)。**Jev Score 在中文难负例上 nDCG@5 0.546，比 BM25 高 13.3 个点（配对差值 95% CI [+5.1, +23.2]，不含零），Recall@1 是其 2.4 倍**；Score 与 Noul 几乎打平（纯排序场景二值问题就够）；分离度 AUC≈0.715；全程成本 $0.071、p50 延迟 0.47s。限制条款见英文节。阈值扫描见 `results/s1_noul-zh_sweep.csv`。
