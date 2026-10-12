@@ -44,3 +44,18 @@ def test_qualification_filter():
     ]
     s = build(rows, n_queries=5, seed=1)
     assert len(s) == 1 and s[0]["query"] == "ok"
+
+
+def test_bootstrap_ci_collapses_on_constants():
+    from analyze import bootstrap_ci
+    vals = {f"q{i}": 0.5 for i in range(50)}
+    lo, hi = bootstrap_ci(vals, n_boot=200)
+    assert lo == hi == 0.5
+
+
+def test_paired_delta_sign():
+    from analyze import paired_delta
+    a = {"q1": {"nDCG@5": 0.8}, "q2": {"nDCG@5": 0.6}}
+    b = {"q1": {"nDCG@5": 0.4}, "q2": {"nDCG@5": 0.5}}
+    mean, lo, hi = paired_delta(a, b, "nDCG@5", n_boot=100)
+    assert mean > 0 and lo <= mean <= hi

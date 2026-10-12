@@ -42,26 +42,53 @@ def ndcg(ranking: list[bool], k: int) -> float:
     return dcg / idcg
 
 
-def metrics(rows: list[dict], sample: dict, variant: str) -> dict:
+def per_query(rows: list[dict], sample: dict, variant: str) -> dict[str, dict]:
+    """Per-query metric values; the unit of bootstrap resampling."""
     by_q = {}
     for r in rows:
         if r["variant"] == variant:
             by_q.setdefault(r["qid"], {})[r["pid"]] = score_of(r)
-    nd5 = nd10 = mrr = r1 = r3 = r5 = 0.0
-    n = 0
+    out = {}
     for qid, scores in by_q.items():
         pool = sample[qid]["pool"]
         order = sorted(pool, key=lambda p: -(scores.get(p["pid"]) if scores.get(p["pid"]) is not None else -1))
         rels = [p["relevant"] for p in order]
-        nd5 += ndcg(rels, 5); nd10 += ndcg(rels, 10)
         rank = next((i + 1 for i, p in enumerate(order) if p["relevant"]), 99)
-        mrr += 1.0 / rank if rank <= 10 else 0
-        r1 += rank <= 1; r3 += rank <= 3; r5 += rank <= 5
-        n += 1
-    if not n:
+        out[qid] = {
+            "nDCG@5": ndcg(rels, 5), "nDCG@10": ndcg(rels, 10),
+            "MRR@10": 1.0 / rank if rank <= 10 else 0.0,
+            "R@1": float(rank <= 1), "R@3": float(rank <= 3), "R@5": float(rank <= 5),
+        }
+    return out
+
+
+def bootstrap_ci(values: dict[str, float], n_boot: int = 1000, seed: int = 42) -> tuple[float, float]:
+    """95% CI of the mean, resampling queries with replacement."""
+    import random
+
+    rng = random.Random(seed)
+    keys = sorted(values)
+    means = []
+    for _ in range(n_boot):
+        picked = rng.choices(keys, k=len(keys))
+        vals = [values[k] for k in picked]
+        means.append(sum(vals) / len(vals))
+    means.sort()
+    return means[int(0.025 * n_boot)], means[int(0.975 * n_boot)]
+
+
+def metrics(rows: list[dict], sample: dict, variant: str) -> dict:
+    pq = per_query(rows, sample, variant)
+    if not pq:
         return {"n": 0}
-    return {"n": n, "nDCG@5": nd5 / n, "nDCG@10": nd10 / n, "MRR@10": mrr / n,
-            "R@1": r1 / n, "R@3": r3 / n, "R@5": r5 / n}
+    out = {"n": len(pq)}
+    for m in ("nDCG@5", "nDCG@10", "MRR@10", "R@1", "R@3", "R@5"):
+        vals = {q: v[m] for q, v in pq.items()}
+        lo, hi = bootstrap_ci(vals)
+        mean = sum(vals.values()) / len(vals)
+        out[m] = mean
+        out[f"{m}_ci"] = (lo, hi)
+    return out
 
 
 def separation(rows: list[dict], variant: str) -> dict:
@@ -100,11 +127,11 @@ def threshold_sweep(rows: list[dict], variant: str) -> list[tuple]:
     return out
 
 
-def bm25_baseline(sample: dict) -> dict:
+def bm25_per_query(sample: dict) -> dict[str, dict]:
     import jieba
     from rank_bm25 import BM25Okapi
 
-    by_q = {}
+    out = {}
     for qid, s in sample.items():
         toks = lambda t: list(jieba.cut_for_search(t))
         bm = BM25Okapi([toks(p["text"]) for p in s["pool"]])
@@ -112,19 +139,53 @@ def bm25_baseline(sample: dict) -> dict:
         order = sorted(zip(s["pool"], scores), key=lambda x: -x[1])
         rank = next((i + 1 for i, (p, _) in enumerate(order) if p["relevant"]), 99)
         rels = [p["relevant"] for p, _ in order]
-        by_q[qid] = (ndcg(rels, 5), ndcg(rels, 10),
-                     1.0 / rank if rank <= 10 else 0, rank <= 1, rank <= 3, rank <= 5)
-    n = len(by_q)
-    cols = list(zip(*by_q.values()))
-    return {"n": n, "nDCG@5": sum(cols[0]) / n, "nDCG@10": sum(cols[1]) / n,
-            "MRR@10": sum(cols[2]) / n, "R@1": sum(cols[3]) / n,
-            "R@3": sum(cols[4]) / n, "R@5": sum(cols[5]) / n}
+        out[qid] = {
+            "nDCG@5": ndcg(rels, 5), "nDCG@10": ndcg(rels, 10),
+            "MRR@10": 1.0 / rank if rank <= 10 else 0.0,
+            "R@1": float(rank <= 1), "R@3": float(rank <= 3), "R@5": float(rank <= 5),
+        }
+    return out
+
+
+def bm25_baseline(sample: dict) -> dict:
+    pq = bm25_per_query(sample)
+    out = {"n": len(pq)}
+    for m in ("nDCG@5", "nDCG@10", "MRR@10", "R@1", "R@3", "R@5"):
+        vals = {q: v[m] for q, v in pq.items()}
+        lo, hi = bootstrap_ci(vals)
+        out[m] = sum(vals.values()) / len(vals)
+        out[f"{m}_ci"] = (lo, hi)
+    return out
+
+
+def paired_delta(a: dict[str, dict], b: dict[str, dict], metric: str,
+                 n_boot: int = 1000, seed: int = 42) -> tuple[float, float, float]:
+    """Paired mean difference a-b on shared qids, with bootstrap CI."""
+    import random
+
+    rng = random.Random(seed)
+    shared = sorted(set(a) & set(b))
+    diffs = {q: a[q][metric] - b[q][metric] for q in shared}
+    mean = sum(diffs.values()) / len(diffs)
+    means = []
+    for _ in range(n_boot):
+        picked = rng.choices(shared, k=len(shared))
+        vals = [diffs[q] for q in picked]
+        means.append(sum(vals) / len(vals))
+    means.sort()
+    return mean, means[int(0.025 * n_boot)], means[int(0.975 * n_boot)]
 
 
 def fmt(m: dict) -> str:
     if m.get("n", 0) == 0:
         return "n/a"
-    return " | ".join(f"{k}={v:.4f}" if isinstance(v, float) else f"{k}={v}" for k, v in m.items())
+    parts = [f"n={m['n']}"]
+    for k, v in m.items():
+        if k == "n" or k.endswith("_ci"):
+            continue
+        ci = m.get(f"{k}_ci")
+        parts.append(f"{k}={v:.4f}" + (f" [{ci[0]:.4f},{ci[1]:.4f}]" if ci else ""))
+    return " | ".join(parts)
 
 
 def main() -> None:
@@ -146,8 +207,19 @@ def main() -> None:
             mp, mn, auc = sep["mean_pos"], sep["mean_neg"], sep["AUC"]
             nn = str(sep["n_pos"]) + "+" + str(sep["n_neg"])
             lines += [f"- separation: mean_pos={mp:.3f} mean_neg={mn:.3f} AUC={auc:.3f} (n={nn})", ""]
-    lines += [f"- BM25 baseline: {fmt(bm25_baseline(sample))}", "",
-              f"- calls: {len(rows)} | input tokens: {tokens:,} | cost: ${spent:.4f}",
+    lines += [f"- BM25 baseline: {fmt(bm25_baseline(sample))}", ""]
+    best_variant = max(
+        (v for v in {r["variant"] for r in rows}),
+        key=lambda v: metrics(rows, sample, v).get("nDCG@5", 0), default=None,
+    )
+    if best_variant:
+        pq_best = per_query(rows, sample, best_variant)
+        pq_bm = bm25_per_query(sample)
+        for metric_name in ("nDCG@5", "nDCG@10"):
+            mean, lo, hi = paired_delta(pq_best, pq_bm, metric_name)
+            lines += [f"- paired delta ({best_variant} − BM25), {metric_name}: "
+                      f"{mean:+.4f} [{lo:+.4f},{hi:+.4f}] (95% bootstrap, n=1000)"]
+    lines += ["", f"- calls: {len(rows)} | input tokens: {tokens:,} | cost: ${spent:.4f}",
               f"- latency p50={lat[len(lat)//2]:.2f}s p95={lat[int(len(lat)*0.95)]:.2f}s (8 workers)"]
     report = Path(f"results/{args.tag}_report.md")
     report.parent.mkdir(exist_ok=True)
