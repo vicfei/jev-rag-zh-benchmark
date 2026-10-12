@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "If you use this benchmark, please cite it."
+title: "Jev RAG Chinese Benchmark: a reproducible first measurement of Jev (TypeSafe System One) as a Chinese reranker"
+authors:
+  - family-names: Chen
+    given-names: Fei
+    alias: vicfei
+type: dataset
+version: 0.1.0
+date-released: "2026-10-12"
+license: MIT
+repository-code: "https://github.com/vicfei/jev-rag-zh-benchmark"
+keywords: [jev, typesafe, system-one, reranking, RAG, Chinese, T2Ranking, benchmark]
