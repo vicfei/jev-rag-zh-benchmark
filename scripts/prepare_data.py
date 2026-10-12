@@ -45,9 +45,12 @@ def build(rows: list[dict], n_queries: int, seed: int, pool_negatives: int = 9,
     rng = random.Random(seed)
 
     def ok(r):
-        pool = [r["positive"][0]] + list(r["negative"][:pool_negatives])
-        return (r.get("positive") and len(r.get("negative") or []) >= pool_negatives
-                and all(len(t) <= max_chars for t in pool))
+        positives = r.get("positive") or []
+        negatives = r.get("negative") or []
+        if not positives or len(negatives) < pool_negatives:
+            return False
+        pool = [positives[0]] + list(negatives[:pool_negatives])
+        return all(len(t) <= max_chars for t in pool)
 
     qualified = [r for r in rows if ok(r)]
     print(f"qualified rows: {len(qualified)} / {len(rows)} "
