@@ -122,9 +122,10 @@ def main() -> None:
     if args.limit:
         sample = sample[: args.limit]
     tasks = [(s["qid"], p["pid"], s["query"], p["text"]) for s in sample for p in s["pool"]]
-    log_path = Path(args.sample).stem + f".{args.variant}.jsonl"
+    log_path = Path("logs") / f"{Path(args.sample).stem}.{args.variant}.jsonl"
+    log_path.parent.mkdir(exist_ok=True)
     log_path.unlink(missing_ok=True)
-    print(f"{len(tasks)} calls → logs/{log_path}")
+    print(f"{len(tasks)} calls → {log_path}")
 
     spent, done, errors = 0.0, 0, 0
     t0 = time.time()
