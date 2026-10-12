@@ -2,7 +2,7 @@
 
 Reproducible Chinese RAG reranking benchmark for [Jev](https://typesafe.ai) (TypeSafe System One), on the canonical Chinese reranking dataset [C-MTEB/T2Reranking](https://huggingface.co/datasets/C-MTEB/T2Reranking) (T2Ranking lineage, hard negatives included).
 
-The frozen protocol lives in [PROTOCOL.md](PROTOCOL.md). Design principles: staged and cost-capped (dry run $0.005, S1 $0.06, runtime breaker at $0.15), pinned model (`typesafe/jev-1.13-20260917`), single run per variant, full per-call JSONL logs published, limitations reported next to results.
+The frozen protocol lives in [PROTOCOL.md](PROTOCOL.md). Dataset mirror with all logs: [cnfeichen/jev-rag-zh-bench on HuggingFace](https://huggingface.co/datasets/cnfeichen/jev-rag-zh-bench). Design principles: staged and cost-capped (dry run $0.005, S1 $0.06, runtime breaker at $0.15), pinned model (`typesafe/jev-1.13-20260917`), single run per variant, full per-call JSONL logs published, limitations reported next to results.
 
 ```
 uv run python scripts/prepare_data.py --n 100 --out s1   # seed 42, deterministic
