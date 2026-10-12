@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jev-rag-zh-benchmark"
+version = "0.1.0"
+description = "Reproducible Chinese RAG reranking benchmark for Jev (TypeSafe System One). Staged, cost-capped, full logs."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = ["pyarrow>=14", "rank-bm25>=0.2.2", "jieba>=0.42"]
+
+[project.urls]
+Patterns = "https://github.com/vicfei/awesome-jev-prompts"
+
+[tool.setuptools]
+packages = ["scripts"]
