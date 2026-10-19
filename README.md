@@ -19,6 +19,19 @@ Companion artifacts: pattern library [awesome-jev-prompts](https://github.com/vi
 
 面向 Jev（TypeSafe System One）的可复现中文 RAG 重排基准。数据：C-MTEB/T2Reranking（T2Ranking 系，含难负例）；模型锁定 `typesafe/jev-1.13-20260917`；阶梯式投入（干跑 $0.005 / S1 $0.06 / 运行时熔断 $0.15）；每次调用全量 JSONL 日志随仓库公开；单次运行、限制条款与结果同页发布。
 
+## Jev 1.14 spot check (2026-10-19, first Chinese numbers)
+
+`jev-latest` was found live-resolving to `typesafe/jev-1.14-20261014` (the docs page still said 1.13 — alias moved silently; anyone with unpinned thresholds is already on 1.14). We re-ran the full S1 score-zh protocol (100 queries, 1,000 calls, $0.037) on the pinned dated id:
+
+| | nDCG@5 | vs BM25 (paired) | AUC | latency p50 |
+|---|---:|---:|---:|---:|
+| jev-1.13 (Oct 12) | 0.5461 | +0.133 [+0.051, +0.232] | 0.714 | 0.47s |
+| **jev-1.14 (Oct 19)** | 0.5464 | +0.134 [+0.050, +0.231] | 0.711 | **0.66s** |
+
+- **Quality: statistically unchanged.** Paired per-query nDCG@5 delta +0.0004 [95% CI −0.037, +0.038]; 92% of individual scores moved slightly (mean |Δ| 0.10 levels, only 1 pair ≥1 full level) — jitter, not a shift. Thresholds tuned on 1.13 do not need retuning for Chinese reranking.
+- **The BM25 gain holds** on 1.14 with a nearly identical interval.
+- **Latency: +40% at p50 (0.47→0.66s, same 8-worker protocol, same channel).** Single-day, single-channel measurement — treat as a flag to watch, not a verdict.
+
 ## S1 results (2026-10-12, n=100, single run)
 
 Model pinned `typesafe/jev-1.13-20260917` via OpenRouter. Pools: 1 positive + 9 hard negatives each, passages ≤3,000 chars. Full logs in `logs/`.

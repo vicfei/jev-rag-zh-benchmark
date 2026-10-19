@@ -19,8 +19,9 @@ import urllib.request
 from pathlib import Path
 
 ENDPOINT = "https://openrouter.ai/api/v1/systemone"
-MODEL = "typesafe/jev-1.13-20260917"
+MODEL = "typesafe/jev-1.13-20260917"  # default; override with --model
 WORKERS = 8
+MODEL_OVERRIDE = None
 KEY_FILE = Path.home() / ".openrouter_key"
 
 SCORE_ZH = {
@@ -84,7 +85,7 @@ def remaining_credits() -> float:
 
 def one_call(variant: str, qid: str, pid: str, query: str, passage: str, log_path: Path):
     body = {
-        "model": MODEL,
+        "model": MODEL_OVERRIDE or MODEL,
         "state": {"query": query, "passage": passage},
         "questions": VARIANTS[variant],
     }
@@ -111,7 +112,12 @@ def main() -> None:
     ap.add_argument("--variant", choices=sorted(VARIANTS), required=True)
     ap.add_argument("--max-cost-usd", type=float, required=True)
     ap.add_argument("--limit", type=int, default=0, help="cap number of queries (0=all)")
+    ap.add_argument("--model", default=None, help="override the pinned model id")
     args = ap.parse_args()
+    global MODEL_OVERRIDE
+    MODEL_OVERRIDE = args.model
+    if args.model:
+        print(f"model override: {args.model}")
 
     bal = remaining_credits()
     if bal < 2 * args.max_cost_usd:
@@ -122,7 +128,8 @@ def main() -> None:
     if args.limit:
         sample = sample[: args.limit]
     tasks = [(s["qid"], p["pid"], s["query"], p["text"]) for s in sample for p in s["pool"]]
-    log_path = Path("logs") / f"{Path(args.sample).stem}.{args.variant}.jsonl"
+    tag = (MODEL_OVERRIDE or MODEL).replace("typesafe/", "").replace(".", "")
+    log_path = Path("logs") / f"{Path(args.sample).stem}.{args.variant}.{tag}.jsonl"
     log_path.parent.mkdir(exist_ok=True)
     log_path.unlink(missing_ok=True)
     print(f"{len(tasks)} calls → {log_path}")
