@@ -56,13 +56,14 @@ Model pinned `typesafe/jev-1.13-20260917` via OpenRouter. Pools: 1 positive + 9 
 | Ranker (Chinese) | nDCG@5 (95% CI) | MRR@10 | R@1 |
 |---|---:|---:|---:|
 | minimind-jev v0.1 (binary labels) | 0.488 [0.417, 0.559] | 0.445 | 0.230 |
+| minimind-jev v0.3-lite (from scratch, 1.5M, CPU 3.5h) | 0.440 [0.372, 0.509] | 0.391 | 0.160 |
 | minimind-jev v0.2 (distilled 4-level) | 0.428 [0.359, 0.495] | 0.398 | 0.190 |
 
-- Paired vs BM25: v0.1 **+0.075 [+0.002, +0.154]** (CI excludes 0). Paired vs hosted Jev score-zh: −0.059 [−0.040, +0.157] — not separable at n=100.
+- Paired vs BM25: v0.1 **+0.075 [+0.002, +0.154]** (CI excludes 0); v0.3-lite +0.027 [−0.050, +0.102] (n.s. at n=100). Paired vs hosted Jev score-zh: v0.1 −0.059 [−0.040, +0.157] — not separable at n=100; v0.3-lite vs v0.1 −0.048 [−0.134, +0.037] — also not separable.
 - The v0.2 row is a documented negative result: teacher soft labels (expected-score AUC 0.716) *reduced* ranking vs the dataset's own binary labels — full analysis and the judgments dataset in the minimind-jev repo.
 
 ## S1 结果（中文）
 
 锁定模型 `typesafe/jev-1.13-20260917`（OpenRouter 通道），100 查询 × (1 正例 + 9 难负例)。**Jev Score 在中文难负例上 nDCG@5 0.546，比 BM25 高 13.3 个点（配对差值 95% CI [+5.1, +23.2]，不含零），Recall@1 是其 2.4 倍**；Score 与 Noul 几乎打平（纯排序场景二值问题就够）；分离度 AUC≈0.715；全程成本 $0.071、p50 延迟 0.47s。限制条款见英文节。阈值扫描见 `results/s1_noul-zh_sweep.csv`。
 
-社区重排器同样本跑分（2026-10-21）：[minimind-jev](https://github.com/vicfei/minimind-jev) v0.1（冻结 bge-small-zh + 66 万参数从零决策头，笔记本 3 分钟训练、零 API 成本）nDCG@5 0.488——配对显著胜 BM25（+0.075，CI 不含零），与 hosted Jev 在 n=100 下统计不可分；其蒸馏版 0.428 为已记录的负结果（教师软标签反伤排序，分析见该仓）。
+社区重排器同样本跑分（2026-10-22 六方）：[minimind-jev](https://github.com/vicfei/minimind-jev) v0.1（冻结 bge-small-zh + 66 万参数从零决策头，笔记本 3 分钟训练、零 API 成本）nDCG@5 0.488——配对显著胜 BM25（+0.075，CI 不含零），与 hosted Jev 在 n=100 下统计不可分；v0.3-lite（**纯 CPU 3.5 小时从零训练的 1.5M transformer**，无预训练底座）0.440——与 BM25、与 v0.1 在 n=100 下均统计不可分；其蒸馏版 0.428 为已记录的负结果（教师软标签反伤排序，分析见该仓）。
