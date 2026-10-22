@@ -22,6 +22,9 @@ ENDPOINT = "https://openrouter.ai/api/v1/systemone"
 MODEL = "typesafe/jev-1.13-20260917"  # default; override with --model
 WORKERS = 8
 MODEL_OVERRIDE = None
+KEY_OVERRIDE = None
+ENDPOINT_OVERRIDE = None
+VARIANT_PREFIX = ""
 KEY_FILE = Path.home() / ".openrouter_key"
 
 SCORE_ZH = {
@@ -41,9 +44,9 @@ VARIANTS = {"score-zh": SCORE_ZH, "noul-zh": NOUL_ZH}
 
 
 def api_key() -> str:
-    if os.environ.get("OPENROUTER_API_KEY"):
-        return os.environ["OPENROUTER_API_KEY"]
-    return KEY_FILE.read_text().strip()
+    if os.environ.get("OPENROUTER_API_KEY") or os.environ.get("BENCH_API_KEY"):
+        return os.environ.get("BENCH_API_KEY") or os.environ["OPENROUTER_API_KEY"]
+    return (KEY_OVERRIDE or KEY_FILE).read_text().strip()
 
 
 def call(path: str, body: dict | None = None, method: str = "GET") -> tuple[int, dict | str]:
@@ -91,10 +94,12 @@ def one_call(variant: str, qid: str, pid: str, query: str, passage: str, log_pat
     }
     qhash = hashlib.sha256(json.dumps(body["questions"], ensure_ascii=False).encode()).hexdigest()[:12]
     t0 = time.time()
-    status, resp = call(ENDPOINT, body, "POST")
+    status, resp = call(ENDPOINT_OVERRIDE or ENDPOINT, body, "POST")
     latency = round(time.time() - t0, 3)
     rec = {
-        "ts": time.time(), "variant": variant, "qid": qid, "pid": pid,
+        "ts": time.time(),
+        "variant": f"{VARIANT_PREFIX}.{variant}" if VARIANT_PREFIX else variant,
+        "qid": qid, "pid": pid,
         "status": status, "latency_s": latency, "qhash": qhash,
         "model": resp.get("model") if isinstance(resp, dict) else None,
         "answer": resp.get("answers") if isinstance(resp, dict) else None,
@@ -113,22 +118,36 @@ def main() -> None:
     ap.add_argument("--max-cost-usd", type=float, required=True)
     ap.add_argument("--limit", type=int, default=0, help="cap number of queries (0=all)")
     ap.add_argument("--model", default=None, help="override the pinned model id")
+    ap.add_argument("--endpoint", default=None,
+                    help="override the API endpoint, e.g. a System-One-compatible server "
+                         "(balance check and cost metering are OpenRouter-only)")
+    ap.add_argument("--key-file", default=None, help="override the key file (default ~/.openrouter_key)")
+    ap.add_argument("--variant-prefix", default="",
+                    help="prefix log variant names, e.g. 'startlux-27b' -> variant 'startlux-27b.score-zh' "
+                         "(keeps analyzer groups separate when several models share a variant wording)")
     args = ap.parse_args()
-    global MODEL_OVERRIDE
+    global MODEL_OVERRIDE, KEY_OVERRIDE, ENDPOINT_OVERRIDE, VARIANT_PREFIX
     MODEL_OVERRIDE = args.model
+    KEY_OVERRIDE = Path(args.key_file).expanduser() if args.key_file else None
+    ENDPOINT_OVERRIDE = args.endpoint
+    VARIANT_PREFIX = args.variant_prefix
     if args.model:
         print(f"model override: {args.model}")
 
-    bal = remaining_credits()
-    if bal < 2 * args.max_cost_usd:
-        sys.exit(f"refusing: remaining balance ${bal:.2f} < 2x budget ${2*args.max_cost_usd:.2f}")
-    print(f"balance OK (${bal:.2f}), budget cap ${args.max_cost_usd:.2f}")
+    if not args.endpoint or "openrouter.ai" in args.endpoint:
+        bal = remaining_credits()
+        if bal < 2 * args.max_cost_usd:
+            sys.exit(f"refusing: remaining balance ${bal:.2f} < 2x budget ${2*args.max_cost_usd:.2f}")
+        print(f"balance OK (${bal:.2f}), budget cap ${args.max_cost_usd:.2f}")
+    else:
+        print(f"custom endpoint {args.endpoint} — skipping OpenRouter balance check")
 
     sample = [json.loads(l) for l in Path(args.sample).read_text().splitlines() if l.strip()]
     if args.limit:
         sample = sample[: args.limit]
     tasks = [(s["qid"], p["pid"], s["query"], p["text"]) for s in sample for p in s["pool"]]
-    tag = (MODEL_OVERRIDE or MODEL).replace("typesafe/", "").replace(".", "")
+    tag = ((VARIANT_PREFIX or "") + "." + (MODEL_OVERRIDE or MODEL)) \
+        .replace("typesafe/", "").replace("/", "-").replace(".", "")
     log_path = Path("logs") / f"{Path(args.sample).stem}.{args.variant}.{tag}.jsonl"
     log_path.parent.mkdir(exist_ok=True)
     log_path.unlink(missing_ok=True)
